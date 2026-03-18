@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+results.txt
+accounts.txt
+invite_tracker.json
