@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPT-Team 管理控制台</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- 头部 -->
+    <header class="header">
+      <h1>🤖 GPT-Team 管理控制台</h1>
+      <div class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span class="status-text">就绪</span>
+      </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <div class="main-content">
+      <!-- 左侧：控制面板 -->
+      <div class="control-panel">
+        <div class="panel-section">
+          <h2>📝 脚本选择</h2>
+          <div class="script-selector">
+            <label class="radio-label">
+              <input type="radio" name="script" value="get-tokens" checked>
+              <span class="script-name">get-tokens</span>
+              <span class="script-desc">注册账号 + 获取 Token</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="script" value="gpt-team">
+              <span class="script-name">gpt-team</span>
+              <span class="script-desc">完整团队管理</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h2>⚙️ 配置预览</h2>
+          <div class="config-preview" id="configPreview">
+            <div class="config-item">
+              <span class="config-key">total_accounts</span>
+              <span class="config-value" id="config-total-accounts">-</span>
+            </div>
+            <div class="config-item">
+              <span class="config-key">temp_mail.domain</span>
+              <span class="config-value" id="config-temp-domain">-</span>
+            </div>
+            <div class="config-item">
+              <span class="config-key">teams</span>
+              <span class="config-value" id="config-teams">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h2>🎮 操作</h2>
+          <div class="action-buttons">
+            <button id="btnRun" class="btn btn-primary">
+              <span class="btn-icon">▶</span>
+              运行脚本
+            </button>
+            <button id="btnStop" class="btn btn-danger" disabled>
+              <span class="btn-icon">⏹</span>
+              停止
+            </button>
+            <button id="btnRefresh" class="btn btn-secondary">
+              <span class="btn-icon">🔄</span>
+              刷新结果
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧：日志和结果 -->
+      <div class="output-panel">
+        <!-- 日志 -->
+        <div class="log-section">
+          <div class="section-header">
+            <h2>📋 运行日志</h2>
+            <button id="btnClearLog" class="btn-small">清空</button>
+          </div>
+          <div class="log-container" id="logContainer">
+            <div class="log-entry log-system">
+              <span class="log-time">系统</span>
+              <span class="log-message">已连接到服务器</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 结果 -->
+        <div class="results-section">
+          <div class="section-header">
+            <h2>📊 运行结果</h2>
+            <div class="result-tabs">
+              <button class="tab-btn active" data-tab="results">results.txt</button>
+              <button class="tab-btn" data-tab="accounts">accounts.txt</button>
+              <button class="tab-btn" data-tab="invites">invites.json</button>
+            </div>
+          </div>
+          <div class="results-container">
+            <div id="tab-results" class="tab-content active">
+              <table class="results-table" id="resultsTable">
+                <thead>
+                  <tr>
+                    <th>邮箱</th>
+                    <th>Email JWT</th>
+                    <th>密码</th>
+                    <th>Access Token</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div id="tab-accounts" class="tab-content">
+              <table class="results-table" id="accountsTable">
+                <thead>
+                  <tr>
+                    <th>邮箱</th>
+                    <th>密码</th>
+                    <th>创建时间</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div id="tab-invites" class="tab-content">
+              <table class="results-table" id="invitesTable">
+                <thead>
+                  <tr>
+                    <th>车头名称</th>
+                    <th>子邮箱</th>
+                    <th>邀请时间</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket.IO -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -2,6 +2,7 @@
 
 > 基于 AI-Account-Toolkit/GPT-team 的 TypeScript 重写版本
 > 使用 Bun 运行，提供更好的性能和类型安全
+> 🎨 现在提供 **Web UI 可视化界面**！
 
 ## 项目介绍
 
@@ -28,6 +29,29 @@ npm install
 ```
 
 ## 使用方法
+
+### 🎨 Web UI（推荐）
+
+启动 Web 服务器：
+
+```bash
+npm run ui
+```
+
+然后访问：**http://localhost:3000**
+
+**Web UI 功能**：
+- ✅ 可视化配置预览
+- ✅ 一键运行脚本（支持 get-tokens 和 gpt-team）
+- ✅ 实时日志查看（WebSocket 推送）
+- ✅ 运行状态监控
+- ✅ 结果查看（results.txt / accounts.txt / invites.json）
+- ✅ 停止/重新运行控制
+- ✅ 多标签页切换结果查看
+
+**界面预览**：
+- 左侧：脚本选择 + 配置预览 + 操作按钮
+- 右侧：实时日志 + 结果表格
 
 ### 1. 配置文件
 
