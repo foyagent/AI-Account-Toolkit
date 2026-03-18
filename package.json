@@ -5,11 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
     "get-tokens": "tsx src/get-tokens.ts",
     "gpt-team": "tsx src/gpt-team.ts",
-    "dev:get-tokens": "tsx watch src/get-tokens.ts",
-    "dev:gpt-team": "tsx watch src/gpt-team.ts",
+    "build": "tsc",
     "clean": "rm -rf dist"
   },
   "repository": {
