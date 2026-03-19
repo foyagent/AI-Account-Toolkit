@@ -150,6 +150,32 @@
         document.getElementById('log-container').innerHTML = '';
       });
 
+      // 停止按钮
+      document.getElementById('stop-btn').addEventListener('click', async () => {
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+
+        try {
+          const response = await fetch('/api/batch/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            addLog(result.message, 'info');
+          } else {
+            addLog(`停止失败: ${result.error}`, 'error');
+          }
+        } catch (error) {
+          addLog(`停止失败: ${error.message}`, 'error');
+        } finally {
+          stopBtn.disabled = true;
+          startBtn.disabled = false;
+        }
+      });
+
       // 添加日志
       function addLog(message, type = 'info') {
         const container = document.getElementById('log-container');

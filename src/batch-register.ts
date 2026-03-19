@@ -190,7 +190,8 @@ async function registerOneAccount(
  */
 export async function batchRegister(
   batchConfig: BatchConfig,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  signal?: AbortSignal
 ): Promise<{ success: AccountData[]; fail: number }> {
   const {
     total,
@@ -208,6 +209,12 @@ export async function batchRegister(
   let failCount = 0;
 
   for (let i = 0; i < total; i++) {
+    // 检查是否被取消
+    if (signal?.aborted) {
+      console.log('批量注册已被取消');
+      break;
+    }
+
     // 注册账号
     const account = await registerOneAccount(batchConfig, (logMsg) => {
       // 在注册过程中只推送日志，不推送完整进度

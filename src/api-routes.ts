@@ -54,6 +54,8 @@ app.use(express.static(join(__dirname, '../public')));
 // 运行中的进程
 // ============================================================
 let runningProcess: ChildProcess | null = null;
+let batchAbortController: AbortController | null = null;
+let batchAbortController: AbortController | null = null;
 
 // ============================================================
 // API 路由
@@ -111,8 +113,16 @@ app.post('/api/batch/register', async (req, res) => {
       });
     }
 
+    // 创建 AbortController 用于取消
+    batchAbortController = new AbortController();
+
     // 开始批量注册
     const result = await batchRegister(config, (progress: BatchProgress) => {
+      // 检查是否被取消
+      if (batchAbortController?.signal.aborted) {
+        throw new Error('批量注册已取消');
+      }
+
       // 通过 WebSocket 推送进度
       io.emit('batch:progress', progress);
 
@@ -120,9 +130,38 @@ app.post('/api/batch/register', async (req, res) => {
       progress.logs.forEach((log) => {
         io.emit('batch:log', log);
       });
-    });
+    }, batchAbortController.signal);
+
+    // 完成后清除 AbortController
+    batchAbortController = null;
 
     res.json({ success: true, data: result });
+  } catch (error: any) {
+    batchAbortController = null;
+    if (error.message === '批量注册已取消') {
+      res.json({ success: false, error: '已取消', cancelled: true });
+    } else {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+});
+
+/**
+ * 停止批量注册
+ */
+app.post('/api/batch/stop', (req, res) => {
+  if (!batchAbortController) {
+    return res.status(400).json({
+      success: false,
+      error: '没有正在进行的批量注册',
+    });
+  }
+
+  try {
+    batchAbortController.abort();
+    batchAbortController = null;
+    io.emit('batch:log', '[系统] 已发送停止信号');
+    res.json({ success: true, message: '已发送停止信号' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
