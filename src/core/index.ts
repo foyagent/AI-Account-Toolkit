@@ -8,5 +8,5 @@
 export { Registrar } from './registrar.js';
 export { oauthLogin } from './oauth.js';
 export { motherLogin, sendTeamInvite, codexOAuth, uploadToCPA } from './team.js';
-export { createTempEmail, waitForOTP, generateRandomPassword } from '../utils/temp-mail.js';
-export { generateRandomPassword as generatePassword } from '../utils/random.js';
+export { createTempEmail, waitForOTP } from '../utils/temp-mail.js';
+export { generateRandomPassword } from '../utils/random.js';
