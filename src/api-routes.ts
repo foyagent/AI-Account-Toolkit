@@ -21,7 +21,7 @@ import yaml from 'yaml';
 
 import { batchRegister, type BatchConfig, type BatchProgress } from './batch-register.js';
 import { verifyAccount, verifyAccountsBatch, type AccountStatus } from './account-verifier.js';
-import { codexCPAUploadDirect as gptLoginAndCPAUpload, type GPTAccount, type CodexUploadResult } from './codex-cpa-upload.js';
+import { gptLoginAndCPAUpload, type GPTAccount, type CodexUploadResult } from './codex-cpa-upload.js';
 import type { TeamConfig, AppConfig } from './types/config.js';
 import type { AccountData } from './types/index.js';
 
