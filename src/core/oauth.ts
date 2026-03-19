@@ -86,7 +86,7 @@ export async function oauthLogin(
   const TEMP_MAIL_WORKER_DOMAIN = config.temp_mail.worker_domain;
   const httpSession = session;
 
-  const cookieJar = session.defaults.jar || new axios.CookieJar?.();
+  const cookieJar = session.defaults.jar as any;
   if (cookieJar) {
     cookieJar.setCookieSync(`oai-did=${deviceId}`, OPENAI_AUTH_BASE);
     cookieJar.setCookieSync(`oai-did=${deviceId}`, 'auth.openai.com');

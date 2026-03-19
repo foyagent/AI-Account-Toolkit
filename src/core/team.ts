@@ -26,7 +26,7 @@ export async function motherLogin(team: TeamConfig): Promise<{ accountId?: strin
   const deviceId = uuidv4();
   const TEMP_MAIL_WORKER_DOMAIN = loadConfig().temp_mail.worker_domain;
 
-  const cookieJar = session.defaults.jar || new axios.CookieJar?.();
+  const cookieJar = session.defaults.jar as any;
   if (cookieJar) {
     cookieJar.setCookieSync(`oai-did=${deviceId}`, OPENAI_AUTH_BASE);
     cookieJar.setCookieSync(`oai-did=${deviceId}`, 'auth.openai.com');

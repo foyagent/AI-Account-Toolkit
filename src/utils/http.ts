@@ -1,4 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
+import axiosCookieJarSupport from 'axios-cookiejar-support';
+import * as tough from 'tough-cookie';
 import type { TempMailConfig } from '../types/config.js';
 
 const USER_AGENT =
@@ -26,7 +28,13 @@ export function createHttpClient(options: HttpClientOptions = {}): AxiosInstance
     config.httpsAgent = undefined;
   }
 
+  // 创建 CookieJar
+  const cookieJar = new tough.CookieJar();
+
   const instance = axios.create(config);
+
+  // 启用 cookie 支持
+  instance.defaults.jar = cookieJar;
 
   // 拦截器：添加默认请求头
   instance.interceptors.request.use((req) => {

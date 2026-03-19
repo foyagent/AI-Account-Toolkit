@@ -51,7 +51,7 @@ export class Registrar {
    */
   async step0InitOAuth(email: string): Promise<boolean> {
     // 设置 cookies
-    const cookieJar = this.session.defaults.jar || new axios.CookieJar?.();
+    const cookieJar = this.session.defaults.jar as any;
     if (cookieJar) {
       cookieJar.setCookieSync(`oai-did=${this.deviceId}`, OPENAI_AUTH_BASE);
       cookieJar.setCookieSync(`oai-did=${this.deviceId}`, 'auth.openai.com');
