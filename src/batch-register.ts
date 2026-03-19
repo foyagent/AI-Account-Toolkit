@@ -126,10 +126,15 @@ async function registerOneAccount(
 
     // 2. 注册账号
     log(`[步骤 2] 开始注册流程...`);
+    
+    log(`[调试] 创建 Registrar 实例，proxy: ${PROXY}`);
     const reg = new Registrar(PROXY);
     const emailJwt = jwt || '';
+    log(`[调试] emailJwt: ${emailJwt ? emailJwt.slice(0, 20) + '...' : 'null'}`);
 
+    log(`[调试] 调用 reg.register...`);
     const registered = await reg.register(tempEmail, emailJwt, password);
+    log(`[调试] reg.register 返回: ${registered}`);
 
     if (!registered) {
       log('[错误] 注册失败');

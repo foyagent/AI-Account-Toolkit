@@ -50,11 +50,19 @@ export class Registrar {
    * Step 0: 初始化 OAuth 会话
    */
   async step0InitOAuth(email: string): Promise<boolean> {
+    console.log('[注册] step0InitOAuth 开始，email:', email);
+    console.log('[注册] OPENAI_AUTH_BASE:', OPENAI_AUTH_BASE);
+    console.log('[注册] OAUTH_CLIENT_ID:', OAUTH_CLIENT_ID);
+    console.log('[注册] OAUTH_REDIRECT_URI:', OAUTH_REDIRECT_URI);
+
     // 设置 cookies
     const cookieJar = this.session.defaults.jar as any;
     if (cookieJar) {
       cookieJar.setCookieSync(`oai-did=${this.deviceId}`, OPENAI_AUTH_BASE);
       cookieJar.setCookieSync(`oai-did=${this.deviceId}`, 'auth.openai.com');
+      console.log('[注册] Cookie 设置成功');
+    } else {
+      console.warn('[注册] CookieJar 不存在');
     }
 
     const { codeVerifier, codeChallenge } = generatePKCE();
@@ -80,13 +88,18 @@ export class Registrar {
 
     const url = `${OPENAI_AUTH_BASE}/oauth/authorize?${params.toString()}`;
     console.log('[注册] OAuth URL:', url);
-    console.log('[注册] OPENAI_AUTH_BASE:', OPENAI_AUTH_BASE);
+    console.log('[注册] session.defaults:', JSON.stringify({
+      baseURL: this.session.defaults.baseURL,
+      timeout: this.session.defaults.timeout,
+      proxy: this.session.defaults.proxy
+    }, null, 2));
 
     try {
       await this.session.get(url, {
         headers: getNavigateHeaders(),
         maxRedirects: 5,
       });
+      console.log('[注册] step0a 成功');
     } catch (error) {
       console.warn('[注册] step0a 失败:', error instanceof Error ? error.message : error);
       return false;
