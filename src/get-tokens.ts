@@ -826,3 +826,8 @@ run().catch((error) => {
   console.error('运行出错:', error);
   process.exit(1);
 });
+
+// ============================================================
+// 导出（供 batch-register.ts 使用）
+// ============================================================
+export { Registrar, oauthLogin, createTempEmail, waitForOTP, generateRandomPassword };
