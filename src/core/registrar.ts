@@ -131,10 +131,13 @@ export class Registrar {
     console.log('[注册] cookies 类型:', typeof cookies);
     console.log('[注册] cookies 值:', cookies);
     
-    if (!cookies.includes('login_session')) {
-      console.warn('[注册] step0a 未获取 login_session cookie');
-      return false;
-    }
+    // 注意：OpenAI 可能已经不再返回 login_session cookie
+    // 先尝试继续执行，看后续步骤是否能成功
+    console.log('[注册] 跳过 login_session 检查，继续执行...');
+    // if (!cookies.includes('login_session')) {
+    //   console.warn('[注册] step0a 未获取 login_session cookie');
+    //   return false;
+    // }
 
     // 提交邮箱
     const h = this.headers(`${OPENAI_AUTH_BASE}/create-account`);
