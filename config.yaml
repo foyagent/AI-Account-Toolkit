@@ -9,10 +9,9 @@ total_accounts: 1
 # 临时邮箱 API 配置
 # ------------------------------------------------------------
 temp_mail:
-  worker_domain: ""
+  worker_domain: "apimail.bitdance.shop"
   email_domains:
-    - "xxx.xyz"
-    - "xxx.eu.org"
+    - "bitdance.shop"
   admin_password: "xxxxxx"
 
 # ------------------------------------------------------------
