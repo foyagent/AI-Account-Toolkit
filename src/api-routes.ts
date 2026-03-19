@@ -21,6 +21,8 @@ import yaml from 'yaml';
 
 import { batchRegister, type BatchConfig, type BatchProgress } from './batch-register.js';
 import { verifyAccount, verifyAccountsBatch, type AccountStatus } from './account-verifier.js';
+import { codexCPAUpload, codexCPAUploadDirect, type GPTAccount, type CodexUploadResult } from './codex-cpa-upload.js';
+import type { TeamConfig, AppConfig } from './types/config.js';
 import type { AccountData } from './types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -492,6 +494,63 @@ app.get('/api/status', (req, res) => {
       pid: runningProcess?.pid || null,
     },
   });
+});
+
+/**
+ * Codex 认证 + CPA 上传（使用车头）
+ */
+app.post('/api/codex-cpa/upload', async (req, res) => {
+  try {
+    const { email, password, teamIndex = 0 } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: '邮箱和密码不能为空',
+      });
+    }
+
+    const config = loadConfig();
+    const teams: TeamConfig[] = config.teams || [];
+    const team = teams[teamIndex];
+
+    if (!team) {
+      return res.status(400).json({
+        success: false,
+        error: `车头索引 ${teamIndex} 不存在`,
+      });
+    }
+
+    const account: GPTAccount = { email, password };
+    const result = await codexCPAUpload(team, account);
+
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Codex 认证 + CPA 上传（直接模式）
+ */
+app.post('/api/codex-cpa/upload-direct', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: '邮箱和密码不能为空',
+      });
+    }
+
+    const account: GPTAccount = { email, password };
+    const result = await codexCPAUploadDirect(account);
+
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ============================================================

@@ -8,6 +8,7 @@
     "get-tokens": "tsx src/get-tokens.ts",
     "gpt-team": "tsx src/gpt-team.ts",
     "batch": "tsx src/batch-register.ts",
+    "codex-cpa": "tsx src/codex-cpa-upload.ts",
     "verify": "tsx src/account-verifier.ts",
     "ui": "tsx src/api-routes.ts",
     "server": "tsx src/server.ts",
