@@ -121,11 +121,11 @@ export class Registrar {
     }
 
     // 检查 login_session cookie
-    const cookies = this.session.defaults.jar?.getCookieString?.(OPENAI_AUTH_BASE);
+    const cookies = (this.session.defaults.jar as any)?.getCookieStringSync?.(OPENAI_AUTH_BASE) || '';
     console.log('[注册] cookies 类型:', typeof cookies);
     console.log('[注册] cookies 值:', cookies);
     
-    if (!cookies || (typeof cookies === 'string' && !cookies.includes('login_session'))) {
+    if (!cookies.includes('login_session')) {
       console.warn('[注册] step0a 未获取 login_session cookie');
       return false;
     }
