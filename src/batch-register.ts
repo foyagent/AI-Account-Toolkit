@@ -18,6 +18,7 @@ import {
   createTempEmail,
   generateRandomPassword,
 } from './core/index.js';
+import { createHttpClient } from './utils/http.js';
 
 import type { TeamConfig, AppConfig } from './types/config.js';
 import type { AccountData } from './types/index.js';
@@ -112,7 +113,7 @@ async function registerOneAccount(
 
     // 1. 创建临时邮箱
     log(`[步骤 1] 创建临时邮箱...`);
-    const httpSession = { defaults: { proxy: PROXY } };
+    const httpSession = createHttpClient({ proxy: PROXY });
     const { email: tempEmail, jwt } = await createTempEmail(httpSession, TEMP_MAIL_CONFIG);
 
     if (!tempEmail) {
