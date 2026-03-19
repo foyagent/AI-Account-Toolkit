@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批量注册 - AI 账号管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🚀 批量注册</h1>
+      <nav>
+        <a href="index.html">首页</a>
+        <a href="batch.html" class="active">批量注册</a>
+        <a href="accounts.html">账号管理</a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- 配置面板 -->
+      <section class="config-panel">
+        <h2>注册配置</h2>
+        <form id="config-form">
+          <div class="form-group">
+            <label for="total">注册数量</label>
+            <input type="number" id="total" name="total" min="1" max="100" value="5" required>
+          </div>
+
+          <div class="form-group">
+            <label for="team-index">车头选择</label>
+            <select id="team-index" name="teamIndex">
+              <option value="">轮询所有车头</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="delay-min">最小延迟 (秒)</label>
+              <input type="number" id="delay-min" name="delayMin" min="1" max="60" value="5" required>
+            </div>
+            <div class="form-group">
+              <label for="delay-max">最大延迟 (秒)</label>
+              <input type="number" id="delay-max" name="delayMax" min="1" max="120" value="15" required>
+            </div>
+          </div>
+
+          <div class="checkbox-group">
+            <label>
+              <input type="checkbox" id="enable-invite" name="enableInvite" checked>
+              发送团队邀请
+            </label>
+            <label>
+              <input type="checkbox" id="enable-codex" name="enableCodex" checked>
+              Codex 授权
+            </label>
+            <label>
+              <input type="checkbox" id="enable-cpa" name="enableCPA" checked>
+              上传到 CPA
+            </label>
+          </div>
+
+          <div class="actions">
+            <button type="submit" id="start-btn" class="btn btn-primary">开始批量注册</button>
+            <button type="button" id="stop-btn" class="btn btn-danger" disabled>停止</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 进度面板 -->
+      <section class="progress-panel">
+        <h2>注册进度</h2>
+        <div class="progress-bar-container">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <div class="progress-text">
+            <span id="progress-current">0</span> / <span id="progress-total">0</span>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat-item">
+            <span class="stat-label">成功</span>
+            <span class="stat-value stat-success" id="stat-success">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">失败</span>
+            <span class="stat-value stat-fail" id="stat-fail">0</span>
+          </div>
+        </div>
+
+        <div class="current-account">
+          <strong>当前账号:</strong> <span id="current-email">-</span><br>
+          <strong>当前车头:</strong> <span id="current-team">-</span>
+        </div>
+      </section>
+
+      <!-- 日志面板 -->
+      <section class="log-panel">
+        <h2>
+          实时日志
+          <button id="clear-log" class="btn btn-small">清空</button>
+        </h2>
+        <div class="log-container" id="log-container"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+  <script>
+    // 页面初始化
+    document.addEventListener('DOMContentLoaded', async () => {
+      const socket = io();
+
+      // 加载配置
+      const configResponse = await fetch('/api/config');
+      const configData = await configResponse.json();
+      if (configData.success && configData.data.teams) {
+        const teamSelect = document.getElementById('team-index');
+        configData.data.teams.forEach((team, index) => {
+          const option = document.createElement('option');
+          option.value = index;
+          option.textContent = `${team.name} (${team.email})`;
+          teamSelect.appendChild(option);
+        });
+      }
+
+      // 表单提交
+      document.getElementById('config-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+
+        const formData = new FormData(e.target);
+        const config = {
+          total: parseInt(formData.get('total')),
+          teamIndex: formData.get('teamIndex') ? parseInt(formData.get('teamIndex')) : undefined,
+          delayMin: parseInt(formData.get('delayMin')),
+          delayMax: parseInt(formData.get('delayMax')),
+          enableInvite: formData.get('enableInvite') === 'on',
+          enableCodex: formData.get('enableCodex') === 'on',
+          enableCPA: formData.get('enableCPA') === 'on',
+        };
+
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        addLog('开始批量注册...', 'info');
+
+        try {
+          const response = await fetch('/api/batch/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            addLog(`批量注册完成！成功: ${result.data.success.length}, 失败: ${result.data.fail}`, 'success');
+          } else {
+            addLog(`批量注册失败: ${result.error}`, 'error');
+          }
+        } catch (error) {
+          addLog(`请求失败: ${error.message}`, 'error');
+        } finally {
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        }
+      });
+
+      // WebSocket 进度推送
+      socket.on('batch:progress', (progress) => {
+        document.getElementById('progress-current').textContent = progress.current;
+        document.getElementById('progress-total').textContent = progress.total;
+        document.getElementById('progress-fill').style.width = `${(progress.current / progress.total) * 100}%`;
+        document.getElementById('stat-success').textContent = progress.success;
+        document.getElementById('stat-fail').textContent = progress.fail;
+        document.getElementById('current-email').textContent = progress.currentEmail || '-';
+        document.getElementById('current-team').textContent = progress.currentTeam || '-';
+      });
+
+      socket.on('batch:log', (log) => {
+        addLog(log);
+      });
+
+      // 清空日志
+      document.getElementById('clear-log').addEventListener('click', () => {
+        document.getElementById('log-container').innerHTML = '';
+      });
+
+      // 添加日志
+      function addLog(message, type = 'info') {
+        const container = document.getElementById('log-container');
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry log-${type}`;
+        logEntry.textContent = message;
+        container.appendChild(logEntry);
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>账号管理 - AI 账号管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📋 账号管理</h1>
+      <nav>
+        <a href="index.html">首页</a>
+        <a href="batch.html">批量注册</a>
+        <a href="accounts.html" class="active">账号管理</a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- 统计面板 -->
+      <section class="stats-panel">
+        <h2>账号统计</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-label">总数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value stat-success" id="stat-active">0</div>
+            <div class="stat-label">正常</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value stat-fail" id="stat-banned">0</div>
+            <div class="stat-label">封禁</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value stat-warning" id="stat-unverified">0</div>
+            <div class="stat-label">未验证</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 操作面板 -->
+      <section class="actions-panel">
+        <h2>操作</h2>
+        <div class="actions-row">
+          <button id="refresh-btn" class="btn btn-primary">刷新列表</button>
+          <button id="verify-all-btn" class="btn btn-warning">验证所有账号</button>
+          <button id="verify-selected-btn" class="btn btn-info">验证选中账号</button>
+          <button id="delete-selected-btn" class="btn btn-danger">删除选中账号</button>
+          <button id="export-btn" class="btn btn-success">导出账号</button>
+        </div>
+      </section>
+
+      <!-- 搜索面板 -->
+      <section class="search-panel">
+        <input type="text" id="search-input" placeholder="搜索邮箱...">
+      </section>
+
+      <!-- 账号列表 -->
+      <section class="accounts-panel">
+        <h2>账号列表</h2>
+        <table class="accounts-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="select-all"></th>
+              <th>邮箱</th>
+              <th>密码</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="accounts-tbody">
+            <!-- 动态生成 -->
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const socket = io();
+      let accounts = [];
+      let selectedEmails = [];
+
+      // 加载账号列表
+      async function loadAccounts() {
+        try {
+          const response = await fetch('/api/accounts');
+          const data = await response.json();
+
+          if (data.success) {
+            accounts = data.data;
+            renderAccounts();
+            loadStats();
+          }
+        } catch (error) {
+          console.error('加载账号列表失败:', error);
+        }
+      }
+
+      // 加载统计
+      async function loadStats() {
+        try {
+          const response = await fetch('/api/accounts/stats');
+          const data = await response.json();
+
+          if (data.success) {
+            document.getElementById('stat-total').textContent = data.data.total;
+            document.getElementById('stat-active').textContent = data.data.active;
+            document.getElementById('stat-banned').textContent = data.data.banned;
+            document.getElementById('stat-unverified').textContent = data.data.unverified;
+          }
+        } catch (error) {
+          console.error('加载统计失败:', error);
+        }
+      }
+
+      // 渲染账号列表
+      function renderAccounts(filter = '') {
+        const tbody = document.getElementById('accounts-tbody');
+        tbody.innerHTML = '';
+
+        const filtered = accounts.filter(account =>
+          account.email.toLowerCase().includes(filter.toLowerCase())
+        );
+
+        filtered.forEach(account => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><input type="checkbox" class="account-checkbox" data-email="${account.email}" ${selectedEmails.includes(account.email) ? 'checked' : ''}></td>
+            <td>${maskEmail(account.email)}</td>
+            <td><code>${maskPassword(account.password)}</code></td>
+            <td><span class="status-badge status-${account.access_token ? 'active' : 'unverified'}">${account.access_token ? '正常' : '未验证'}</span></td>
+            <td>${formatDate(account.created_at)}</td>
+            <td>
+              <button class="btn btn-small btn-verify" data-email="${account.email}">验证</button>
+              <button class="btn btn-small btn-delete" data-email="${account.email}">删除</button>
+              <button class="btn btn-small btn-copy" data-email="${account.email}" data-password="${account.password}">复制</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        // 更新全选状态
+        updateSelectAllState();
+      }
+
+      // 遮蔽邮箱
+      function maskEmail(email) {
+        const [local, domain] = email.split('@');
+        const maskedLocal = local.length > 3 ? local.substring(0, 3) + '***' : local;
+        return maskedLocal + '@' + domain;
+      }
+
+      // 遮蔽密码
+      function maskPassword(password) {
+        return password.length > 4 ? '****' + password.substring(password.length - 2) : password;
+      }
+
+      // 格式化日期
+      function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleString('zh-CN');
+      }
+
+      // 更新全选状态
+      function updateSelectAllState() {
+        const checkboxes = document.querySelectorAll('.account-checkbox');
+        const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+        document.getElementById('select-all').checked = allChecked;
+      }
+
+      // 验证单个账号
+      async function verifyAccount(email) {
+        try {
+          const response = await fetch('/api/accounts/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            alert(`验证结果: ${data.data.message}`);
+            loadAccounts();
+          } else {
+            alert(`验证失败: ${data.error}`);
+          }
+        } catch (error) {
+          alert(`请求失败: ${error.message}`);
+        }
+      }
+
+      // 删除账号
+      async function deleteAccount(email) {
+        if (!confirm(`确定要删除账号 ${email} 吗？`)) return;
+
+        try {
+          const response = await fetch(`/api/accounts/${encodeURIComponent(email)}`, {
+            method: 'DELETE',
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            alert('账号已删除');
+            loadAccounts();
+          } else {
+            alert(`删除失败: ${data.error}`);
+          }
+        } catch (error) {
+          alert(`请求失败: ${error.message}`);
+        }
+      }
+
+      // 复制账号信息
+      function copyAccount(email, password) {
+        const text = `邮箱: ${email}\n密码: ${password}`;
+        navigator.clipboard.writeText(text).then(() => {
+          alert('账号信息已复制到剪贴板');
+        }).catch(() => {
+          alert('复制失败，请手动复制');
+        });
+      }
+
+      // 事件绑定
+      document.getElementById('refresh-btn').addEventListener('click', () => {
+        loadAccounts();
+        loadStats();
+      });
+
+      document.getElementById('verify-all-btn').addEventListener('click', async () => {
+        if (!confirm('确定要验证所有账号吗？')) return;
+
+        try {
+          const response = await fetch('/api/accounts/verify-batch', {
+            method: 'POST',
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            alert(`批量验证完成！`);
+            loadAccounts();
+            loadStats();
+          } else {
+            alert(`批量验证失败: ${data.error}`);
+          }
+        } catch (error) {
+          alert(`请求失败: ${error.message}`);
+        }
+      });
+
+      document.getElementById('verify-selected-btn').addEventListener('click', async () => {
+        const selected = Array.from(document.querySelectorAll('.account-checkbox:checked'))
+          .map(cb => cb.dataset.email);
+
+        if (selected.length === 0) {
+          alert('请先选择要验证的账号');
+          return;
+        }
+
+        for (const email of selected) {
+          await verifyAccount(email);
+        }
+      });
+
+      document.getElementById('delete-selected-btn').addEventListener('click', async () => {
+        const selected = Array.from(document.querySelectorAll('.account-checkbox:checked'))
+          .map(cb => cb.dataset.email);
+
+        if (selected.length === 0) {
+          alert('请先选择要删除的账号');
+          return;
+        }
+
+        if (!confirm(`确定要删除 ${selected.length} 个账号吗？`)) return;
+
+        try {
+          const response = await fetch('/api/accounts/delete-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emails: selected }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            alert(`已删除 ${data.data.deleted} 个账号`);
+            loadAccounts();
+            loadStats();
+          } else {
+            alert(`删除失败: ${data.error}`);
+          }
+        } catch (error) {
+          alert(`请求失败: ${error.message}`);
+        }
+      });
+
+      document.getElementById('export-btn').addEventListener('click', async () => {
+        try {
+          const response = await fetch('/api/accounts/export');
+          const data = await response.json();
+
+          if (data.success) {
+            const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `accounts_export_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          } else {
+            alert(`导出失败: ${data.error}`);
+          }
+        } catch (error) {
+          alert(`请求失败: ${error.message}`);
+        }
+      });
+
+      document.getElementById('search-input').addEventListener('input', (e) => {
+        renderAccounts(e.target.value);
+      });
+
+      document.getElementById('select-all').addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.account-checkbox');
+        checkboxes.forEach(cb => {
+          cb.checked = e.target.checked;
+        });
+      });
+
+      document.getElementById('accounts-tbody').addEventListener('click', (e) => {
+        if (e.target.classList.contains('btn-verify')) {
+          verifyAccount(e.target.dataset.email);
+        } else if (e.target.classList.contains('btn-delete')) {
+          deleteAccount(e.target.dataset.email);
+        } else if (e.target.classList.contains('btn-copy')) {
+          copyAccount(e.target.dataset.email, e.target.dataset.password);
+        }
+      });
+
+      // WebSocket 进度推送
+      socket.on('verify:progress', (progress) => {
+        console.log(`验证进度: ${progress.current}/${progress.total}`, progress.status);
+      });
+
+      // 初始加载
+      loadAccounts();
+      loadStats();
+    });
+  </script>
+</body>
+</html>
