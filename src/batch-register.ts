@@ -15,17 +15,14 @@ import yaml from 'yaml';
 import {
   Registrar,
   oauthLogin,
-  createTempEmail,
-  waitForOTP,
-  generateRandomPassword,
-} from './get-tokens.js';
-
-import {
   motherLogin,
   sendTeamInvite,
   codexOAuth,
   uploadToCPA,
-} from './gpt-team.js';
+  createTempEmail,
+  waitForOTP,
+  generateRandomPassword,
+} from './core/index.js';
 
 import type { TeamConfig, AppConfig } from './types/config.js';
 import type { AccountData } from './types/index.js';
