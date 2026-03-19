@@ -21,6 +21,7 @@ const OAUTH_REDIRECT_URI = 'http://localhost:1455/auth/callback';
 export class Registrar {
   private session: AxiosInstance;
   private deviceId: string;
+  private authSessionLoggingId: string;
   private sentinelGen: SentinelTokenGenerator;
   private codeVerifier?: string;
   private state?: string;
@@ -28,7 +29,9 @@ export class Registrar {
   constructor(proxy: string = '') {
     this.session = createHttpClient({ proxy });
     this.deviceId = uuidv4();
+    this.authSessionLoggingId = uuidv4();
     this.sentinelGen = new SentinelTokenGenerator(this.deviceId);
+    // 不设置 cookies，Python 版本中在 session 初始化时自动处理
   }
 
   private headers(referer: string, withSentinel: boolean = false): Record<string, string> {
@@ -74,15 +77,21 @@ export class Registrar {
   async step1GetCsrf(): Promise<string | null> {
     console.log('[注册] step1 获取 CSRF token');
     try {
-      const response = await this.session.get('https://chatgpt.com/backend-api/csrf-protection', {
-        headers: this.headers('https://chatgpt.com'),
+      const response = await this.session.get('https://chatgpt.com/api/auth/csrf', {
+        headers: {
+          'Accept': 'application/json',
+          'Referer': 'https://chatgpt.com/',
+        },
         maxRedirects: 5,
       });
       console.log('[注册] step1 成功，状态码:', response.status);
       
-      const csrfToken = response.headers['x-csrf-token'];
+      const data = response.data as any;
+      const csrfToken = data?.csrfToken || '';
+      
       if (!csrfToken) {
         console.warn('[注册] 未获取到 CSRF token');
+        console.log('[注册] 响应数据:', data);
         return null;
       }
       
@@ -99,14 +108,33 @@ export class Registrar {
    */
   async step2Signin(email: string, csrf: string): Promise<string | null> {
     console.log('[注册] step2 Signin，email:', email);
+    console.log('[注册] CSRF token:', csrf);
+    
+    this.authSessionLoggingId = uuidv4();
+
     try {
+      const params = new URLSearchParams({
+        'prompt': 'login',
+        'ext-oai-did': this.deviceId,
+        'auth_session_logging_id': this.authSessionLoggingId,
+        'screen_hint': 'login_or_signup',
+        'login_hint': email,
+      });
+
+      const formData = new URLSearchParams();
+      formData.append('callbackUrl', 'https://chatgpt.com/');
+      formData.append('csrfToken', csrf);
+      formData.append('json', 'true');
+
       const response = await this.session.post(
-        'https://chatgpt.com/backend-api/login',
-        { email },
+        'https://chatgpt.com/api/auth/signin/openai?' + params.toString(),
+        formData,
         {
           headers: {
-            ...this.headers('https://chatgpt.com', true),
-            'x-csrf-token': csrf,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+            'Referer': 'https://chatgpt.com/',
+            'Origin': 'https://chatgpt.com',
           },
           maxRedirects: 5,
         }
@@ -114,7 +142,7 @@ export class Registrar {
       console.log('[注册] step2 成功，状态码:', response.status);
 
       const data = response.data as any;
-      const authorizeUrl = data?.authorize_url || data?.url;
+      const authorizeUrl = data?.url || '';
       
       if (!authorizeUrl) {
         console.warn('[注册] 未获取到 authorize_url');
