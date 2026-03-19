@@ -1,0 +1,2 @@
+test@example.com|mock_token|true|2024-01-01T00:00:00.000Z|成功
+test@example.com|mock_token|true|2024-01-01T00:00:00.000Z|成功

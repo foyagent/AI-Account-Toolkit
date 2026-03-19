@@ -7,6 +7,7 @@
  * 使用方式：
  * 1. CLI: npm run codex-cpa <email> <password>
  * 2. API: POST /api/codex-cpa/upload
+ * 3. 测试: bun test
  */
 
 import { appendFileSync } from 'fs';
@@ -39,12 +40,18 @@ export interface CodexUploadResult {
   timestamp: string;
 }
 
+export interface GPTCPADeps {
+  oauthLogin: (email: string, password: string, otp: string, proxy: string) => Promise<string | null>;
+  uploadToCPA: (email: string, password: string, accessToken: string) => Promise<boolean>;
+  loadConfig?: () => any;
+}
+
 // ============================================================
 // 结果保存
 // ============================================================
 const RESULTS_FILE = join(__dirname, '../codex-cpa-results.txt');
 
-function saveResult(result: CodexUploadResult): void {
+export function saveResult(result: CodexUploadResult): void {
   const line = `${result.email}|${result.accessToken || ''}|${result.cpaUploaded}|${result.timestamp}|${result.message}\n`;
   appendFileSync(RESULTS_FILE, line, 'utf-8');
   console.log('已保存结果:', result.email, '→', RESULTS_FILE);
@@ -57,13 +64,14 @@ function saveResult(result: CodexUploadResult): void {
  * GPT 登录 + CPA 上传（直接模式）
  */
 export async function gptLoginAndCPAUpload(
-  childAccount: GPTAccount
+  childAccount: GPTAccount,
+  deps: GPTCPADeps = { oauthLogin, uploadToCPA, loadConfig }
 ): Promise<CodexUploadResult> {
   console.log('='.repeat(60));
   console.log(`开始处理账号: ${childAccount.email}`);
   console.log('='.repeat(60));
 
-  const config = loadConfig();
+  const config = deps.loadConfig ? deps.loadConfig() : loadConfig();
   const result: CodexUploadResult = {
     email: childAccount.email,
     accessToken: undefined,
@@ -75,7 +83,7 @@ export async function gptLoginAndCPAUpload(
   try {
     // 1. 登录获取 access_token
     console.log('[步骤 1] 登录 GPT 账号获取 access_token');
-    const accessToken = await oauthLogin(
+    const accessToken = await deps.oauthLogin(
       childAccount.email,
       childAccount.password,
       '',
@@ -94,7 +102,7 @@ export async function gptLoginAndCPAUpload(
 
     // 2. 上传到 CPA
     console.log('[步骤 2] 上传到 CPA');
-    const uploaded = await uploadToCPA(
+    const uploaded = await deps.uploadToCPA(
       childAccount.email,
       childAccount.password,
       accessToken
@@ -130,7 +138,8 @@ export async function gptLoginAndCPAUpload(
  */
 export async function batchGPTLoginAndCPAUpload(
   accounts: GPTAccount[],
-  onProgress?: (index: number, total: number, result: CodexUploadResult) => void
+  onProgress?: (index: number, total: number, result: CodexUploadResult) => void,
+  deps: GPTCPADeps = { oauthLogin, uploadToCPA, loadConfig }
 ): Promise<{ success: CodexUploadResult[]; fail: number }> {
   console.log('='.repeat(60));
   console.log('开始批量登录 + CPA 上传');
@@ -143,7 +152,7 @@ export async function batchGPTLoginAndCPAUpload(
   for (let i = 0; i < accounts.length; i++) {
     console.log(`\n[${i + 1}/${accounts.length}] 处理账号: ${accounts[i].email}`);
 
-    const result = await gptLoginAndCPAUpload(accounts[i]);
+    const result = await gptLoginAndCPAUpload(accounts[i], deps);
 
     results.push(result);
 

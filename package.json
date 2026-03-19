@@ -12,6 +12,9 @@
     "verify": "tsx src/account-verifier.ts",
     "ui": "tsx src/api-routes.ts",
     "server": "tsx src/server.ts",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui",
     "build": "tsc",
     "clean": "rm -rf dist"
   },
@@ -30,8 +33,10 @@
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@vitest/ui": "^4.1.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "axios": "^1.13.6",
