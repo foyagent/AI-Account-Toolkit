@@ -9,10 +9,11 @@ total_accounts: 1
 # 临时邮箱 API 配置
 # ------------------------------------------------------------
 temp_mail:
-  worker_domain: "apimail.bitdance.shop"
+  worker_domain: "email.xxx.xyz"
   email_domains:
-    - "bitdance.shop"
-  admin_password: "xxxxxx"
+    - "xxx.xyz"
+    - "xxx.eu.org"
+  admin_password: "your_admin_password"
 
 # ------------------------------------------------------------
 # CLI Proxy API (CPA) 配置
