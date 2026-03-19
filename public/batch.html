@@ -27,13 +27,6 @@
             <input type="number" id="total" name="total" min="1" max="100" value="5" required>
           </div>
 
-          <div class="form-group">
-            <label for="team-index">车头选择</label>
-            <select id="team-index" name="teamIndex">
-              <option value="">轮询所有车头</option>
-            </select>
-          </div>
-
           <div class="form-row">
             <div class="form-group">
               <label for="delay-min">最小延迟 (秒)</label>
@@ -43,21 +36,6 @@
               <label for="delay-max">最大延迟 (秒)</label>
               <input type="number" id="delay-max" name="delayMax" min="1" max="120" value="15" required>
             </div>
-          </div>
-
-          <div class="checkbox-group">
-            <label>
-              <input type="checkbox" id="enable-invite" name="enableInvite" checked>
-              发送团队邀请
-            </label>
-            <label>
-              <input type="checkbox" id="enable-codex" name="enableCodex" checked>
-              Codex 授权
-            </label>
-            <label>
-              <input type="checkbox" id="enable-cpa" name="enableCPA" checked>
-              上传到 CPA
-            </label>
           </div>
 
           <div class="actions">
@@ -91,8 +69,7 @@
         </div>
 
         <div class="current-account">
-          <strong>当前账号:</strong> <span id="current-email">-</span><br>
-          <strong>当前车头:</strong> <span id="current-team">-</span>
+          <strong>当前账号:</strong> <span id="current-email">-</span>
         </div>
       </section>
 
@@ -114,19 +91,6 @@
     document.addEventListener('DOMContentLoaded', async () => {
       const socket = io();
 
-      // 加载配置
-      const configResponse = await fetch('/api/config');
-      const configData = await configResponse.json();
-      if (configData.success && configData.data.teams) {
-        const teamSelect = document.getElementById('team-index');
-        configData.data.teams.forEach((team, index) => {
-          const option = document.createElement('option');
-          option.value = index;
-          option.textContent = `${team.name} (${team.email})`;
-          teamSelect.appendChild(option);
-        });
-      }
-
       // 表单提交
       document.getElementById('config-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -137,12 +101,8 @@
         const formData = new FormData(e.target);
         const config = {
           total: parseInt(formData.get('total')),
-          teamIndex: formData.get('teamIndex') ? parseInt(formData.get('teamIndex')) : undefined,
           delayMin: parseInt(formData.get('delayMin')),
           delayMax: parseInt(formData.get('delayMax')),
-          enableInvite: formData.get('enableInvite') === 'on',
-          enableCodex: formData.get('enableCodex') === 'on',
-          enableCPA: formData.get('enableCPA') === 'on',
         };
 
         startBtn.disabled = true;
@@ -179,7 +139,6 @@
         document.getElementById('stat-success').textContent = progress.success;
         document.getElementById('stat-fail').textContent = progress.fail;
         document.getElementById('current-email').textContent = progress.currentEmail || '-';
-        document.getElementById('current-team').textContent = progress.currentTeam || '-';
       });
 
       socket.on('batch:log', (log) => {

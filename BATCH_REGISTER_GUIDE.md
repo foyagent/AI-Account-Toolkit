@@ -2,13 +2,14 @@
 
 ## 📋 功能概述
 
-本次更新新增了完整的批量注册和账号管理功能，包括：
+本次更新新增了完整的批量注册和账号管理功能：
 
-### 1. 批量注册功能
+### 1. 批量注册功能（纯注册版本）
+- 只做注册 + 获取 access_token
+- 不涉及车头、团队邀请、Codex 授权等复杂功能
 - 复用核心注册逻辑，不重复实现
-- 支持自定义配置（数量、车头、延迟）
+- 支持自定义配置（数量、延迟）
 - 实时日志和进度推送
-- 可选功能：团队邀请、Codex 授权、CPA 上传
 
 ### 2. 账号验证功能
 - 检测账号登录状态
@@ -38,12 +39,13 @@ npm install
 # 注册账号总数
 total_accounts: 5
 
-# 车头配置
-teams:
-  - name: "车头1"
-    email: "your@email.com"
-    password: "password"
-    max_invites: 4
+# 临时邮箱 API 配置
+temp_mail:
+  worker_domain: ""
+  email_domains:
+    - "xxx.xyz"
+    - "xxx.eu.org"
+  admin_password: "xxxxxx"
 ```
 
 ### 3. 启动 Web UI
@@ -61,19 +63,20 @@ npm run ui
 
 ## 📖 功能使用
 
-### 批量注册
+### 批量注册（纯注册版本）
 
 1. 打开 `batch.html` 页面
 2. 配置注册参数：
    - **注册数量**: 要注册的账号数量
-   - **车头选择**: 选择特定车头或轮询所有车头
    - **延迟范围**: 每个账号注册之间的等待时间
-   - **功能开关**:
-     - 发送团队邀请
-     - Codex 授权
-     - 上传到 CPA
 3. 点击"开始批量注册"
 4. 查看实时日志和进度
+
+**注册流程：**
+1. 创建临时邮箱
+2. 注册账号（五步 HTTP 流程）
+3. 登录获取 access_token
+4. 保存到 accounts_db.json
 
 ### 账号管理
 
@@ -99,12 +102,8 @@ Content-Type: application/json
 
 {
   "total": 5,
-  "teamIndex": 0,
   "delayMin": 5,
-  "delayMax": 15,
-  "enableInvite": true,
-  "enableCodex": true,
-  "enableCPA": true
+  "delayMax": 15
 }
 ```
 

@@ -1,8 +1,8 @@
 /**
  * batch-register.ts
  * ================
- * 批量注册胶水脚本
- * 复用核心注册逻辑，实现批量注册子号功能
+ * 批量注册脚本（纯注册版本）
+ * 只做注册 + 获取 access_token，不涉及车头、邀请、授权等
  */
 
 import { randomInt } from 'crypto';
@@ -15,12 +15,7 @@ import yaml from 'yaml';
 import {
   Registrar,
   oauthLogin,
-  motherLogin,
-  sendTeamInvite,
-  codexOAuth,
-  uploadToCPA,
   createTempEmail,
-  waitForOTP,
   generateRandomPassword,
 } from './core/index.js';
 
@@ -35,12 +30,8 @@ const __dirname = dirname(__filename);
 // ============================================================
 export interface BatchConfig {
   total: number;
-  teamIndex?: number; // 指定使用哪个车头，不指定则轮询
   delayMin?: number; // 最小延迟（秒）
   delayMax?: number; // 最大延迟（秒）
-  enableInvite?: boolean; // 是否发送团队邀请
-  enableCodex?: boolean; // 是否授权 Codex
-  enableCPA?: boolean; // 是否上传到 CPA
 }
 
 export interface BatchProgress {
@@ -49,7 +40,6 @@ export interface BatchProgress {
   success: number;
   fail: number;
   currentEmail?: string;
-  currentTeam?: string;
   logs: string[];
 }
 
@@ -63,10 +53,8 @@ function loadConfig(): AppConfig {
 }
 
 const config = loadConfig();
-const TEAMS: TeamConfig[] = config.teams || [];
 const PROXY = config.proxy || '';
 const TEMP_MAIL_CONFIG = config.temp_mail;
-const CLI_PROXY = config.cli_proxy;
 
 // ============================================================
 // 数据库文件
@@ -93,18 +81,6 @@ function saveAccountToDB(account: AccountData): void {
   writeFileSync(ACCOUNTS_DB_PATH, JSON.stringify(accounts, null, 2));
 }
 
-/**
- * 更新账号状态
- */
-function updateAccountInDB(email: string, updates: Partial<AccountData>): void {
-  const accounts = loadAccountsDB();
-  const index = accounts.findIndex((a) => a.email === email);
-  if (index !== -1) {
-    accounts[index] = { ...accounts[index], ...updates };
-    writeFileSync(ACCOUNTS_DB_PATH, JSON.stringify(accounts, null, 2));
-  }
-}
-
 // ============================================================
 // 进度回调
 // ============================================================
@@ -114,10 +90,9 @@ type ProgressCallback = (progress: BatchProgress) => void;
 // 批量注册核心逻辑
 // ============================================================
 /**
- * 注册单个账号
+ * 注册单个账号（纯注册）
  */
 async function registerOneAccount(
-  team: TeamConfig,
   batchConfig: BatchConfig,
   onLog?: (message: string) => void
 ): Promise<AccountData | null> {
@@ -135,23 +110,10 @@ async function registerOneAccount(
     log('='.repeat(60));
     log(`开始注册账号`);
 
-    // 1. 获取车头信息
-    log(`[步骤 1] 获取车头信息: ${team.name} (${team.email})`);
-    const teamInfo = await motherLogin(team);
-
-    if (!teamInfo?.accountId || !teamInfo?.authToken) {
-      log('[错误] 获取车头信息失败');
-      return null;
-    }
-
-    log(`[步骤 1] 成功获取车头信息: account_id=${teamInfo.accountId}`);
-
-    // 2. 创建临时邮箱
-    log(`[步骤 2] 创建临时邮箱...`);
-    const { email: tempEmail, jwt } = await createTempEmail(
-      { defaults: { proxy: PROXY } } as any,
-      TEMP_MAIL_CONFIG
-    );
+    // 1. 创建临时邮箱
+    log(`[步骤 1] 创建临时邮箱...`);
+    const httpSession = { defaults: { proxy: PROXY } };
+    const { email: tempEmail, jwt } = await createTempEmail(httpSession, TEMP_MAIL_CONFIG);
 
     if (!tempEmail) {
       log('[错误] 创建临时邮箱失败');
@@ -159,10 +121,10 @@ async function registerOneAccount(
     }
 
     const password = generateRandomPassword();
-    log(`[步骤 2] 临时邮箱创建成功: ${tempEmail}`);
+    log(`[步骤 1] 临时邮箱创建成功: ${tempEmail}`);
 
-    // 3. 注册账号
-    log(`[步骤 3] 开始注册流程...`);
+    // 2. 注册账号
+    log(`[步骤 2] 开始注册流程...`);
     const reg = new Registrar(PROXY);
     const emailJwt = jwt || '';
 
@@ -173,22 +135,22 @@ async function registerOneAccount(
       return null;
     }
 
-    log(`[步骤 3] 注册成功，等待 3s...`);
+    log(`[步骤 2] 注册成功，等待 3s...`);
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    // 4. 登录获取 access_token
-    log(`[步骤 4] 登录获取 access_token...`);
+    // 3. 登录获取 access_token
+    log(`[步骤 3] 登录获取 access_token...`);
 
     let accessToken: string | null = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       accessToken = await oauthLogin(tempEmail, password, emailJwt, PROXY);
       if (accessToken) {
-        log(`[步骤 4] access_token 获取成功`);
+        log(`[步骤 3] access_token 获取成功`);
         break;
       }
 
       if (attempt < 3) {
-        log(`[步骤 4] 登录第 ${attempt} 次失败，15s 后重试...`);
+        log(`[步骤 3] 登录第 ${attempt} 次失败，15s 后重试...`);
         await new Promise((resolve) => setTimeout(resolve, 15000));
       }
     }
@@ -197,51 +159,12 @@ async function registerOneAccount(
       log('[警告] 获取 access_token 失败（注册已成功）');
     }
 
-    // 5. 发送团队邀请
-    if (batchConfig.enableInvite && teamInfo.accountId && teamInfo.authToken) {
-      log(`[步骤 5] 发送团队邀请...`);
-      const invite = await sendTeamInvite(teamInfo.accountId, teamInfo.authToken, tempEmail);
-
-      if (invite) {
-        log(`[步骤 5] 团队邀请发送成功: ${invite.inviteUrl}`);
-      } else {
-        log(`[警告] 团队邀请发送失败`);
-      }
-    }
-
-    // 6. Codex OAuth 授权
-    let codexToken: string | null = null;
-    if (batchConfig.enableCodex && teamInfo.accountId && teamInfo.authToken && accessToken) {
-      log(`[步骤 6] Codex OAuth 授权...`);
-      codexToken = await codexOAuth(teamInfo.accountId, teamInfo.authToken, tempEmail, password);
-
-      if (codexToken) {
-        log(`[步骤 6] Codex 授权成功`);
-      } else {
-        log(`[警告] Codex 授权失败`);
-      }
-    }
-
-    // 7. 上传到 CPA
-    if (batchConfig.enableCPA && codexToken) {
-      log(`[步骤 7] 上传到 CPA...`);
-      const uploaded = await uploadToCPA(tempEmail, password, codexToken);
-
-      if (uploaded) {
-        log(`[步骤 7] CPA 上传成功`);
-      } else {
-        log(`[警告] CPA 上传失败`);
-      }
-    }
-
-    // 8. 保存账号信息
+    // 4. 保存账号信息
     const account: AccountData = {
       email: tempEmail,
       password: password,
       email_jwt: emailJwt,
       access_token: accessToken || undefined,
-      account_id: teamInfo.accountId,
-      auth_token: teamInfo.authToken,
       created_at: new Date().toISOString(),
     };
 
@@ -265,18 +188,13 @@ export async function batchRegister(
 ): Promise<{ success: AccountData[]; fail: number }> {
   const {
     total,
-    teamIndex,
     delayMin = 5,
     delayMax = 15,
-    enableInvite = true,
-    enableCodex = true,
-    enableCPA = true,
   } = batchConfig;
 
   console.log('='.repeat(60));
-  console.log('开始批量注册');
+  console.log('开始批量注册（纯注册版本）');
   console.log(`目标数量: ${total}`);
-  console.log(`车头数量: ${TEAMS.length}`);
   console.log(`延迟范围: ${delayMin}-${delayMax} 秒`);
   console.log('='.repeat(60));
 
@@ -284,18 +202,8 @@ export async function batchRegister(
   let failCount = 0;
 
   for (let i = 0; i < total; i++) {
-    // 选择车头
-    const teamIdx = teamIndex !== undefined ? teamIndex : i % TEAMS.length;
-    const team = TEAMS[teamIdx];
-
-    if (!team) {
-      console.error(`[错误] 车头不存在: index=${teamIdx}`);
-      failCount++;
-      continue;
-    }
-
     // 注册账号
-    const account = await registerOneAccount(team, batchConfig, (logMsg) => {
+    const account = await registerOneAccount(batchConfig, (logMsg) => {
       if (onProgress) {
         onProgress({
           current: i + 1,
@@ -303,7 +211,6 @@ export async function batchRegister(
           success: successAccounts.length,
           fail: failCount,
           currentEmail: account?.email,
-          currentTeam: team.name,
           logs: [logMsg],
         });
       }
@@ -323,7 +230,6 @@ export async function batchRegister(
         success: successAccounts.length,
         fail: failCount,
         currentEmail: account?.email,
-        currentTeam: team.name,
         logs: [],
       });
     }
@@ -352,9 +258,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     total: config.total_accounts || 1,
     delayMin: 5,
     delayMax: 15,
-    enableInvite: true,
-    enableCodex: true,
-    enableCPA: config.cli_proxy?.upload_enabled ?? true,
   };
 
   batchRegister(batchConfig).catch((error) => {
