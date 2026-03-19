@@ -65,15 +65,17 @@ export class Registrar {
       console.warn('[注册] CookieJar 不存在');
     }
 
+    console.log('[注册] 开始生成 PKCE...');
     const { codeVerifier, codeChallenge } = generatePKCE();
     this.codeVerifier = codeVerifier;
     this.state = uuidv4();
 
-    console.log('[注册] PKCE:', { 
+    console.log('[注册] PKCE 生成成功:', { 
       codeVerifier: codeVerifier.slice(0, 20) + '...', 
       codeChallenge: codeChallenge.slice(0, 20) + '...' 
     });
 
+    console.log('[注册] 开始构建 URLSearchParams...');
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: OAUTH_CLIENT_ID,
@@ -85,13 +87,15 @@ export class Registrar {
       screen_hint: 'signup',
       prompt: 'login',
     });
+    console.log('[注册] URLSearchParams 构建成功');
 
     const url = `${OPENAI_AUTH_BASE}/oauth/authorize?${params.toString()}`;
     console.log('[注册] OAuth URL:', url);
     console.log('[注册] session.defaults:', JSON.stringify({
       baseURL: this.session.defaults.baseURL,
       timeout: this.session.defaults.timeout,
-      proxy: this.session.defaults.proxy
+      proxy: this.session.defaults.proxy,
+      jar: !!this.session.defaults.jar
     }, null, 2));
 
     try {
