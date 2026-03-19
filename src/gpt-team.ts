@@ -620,10 +620,12 @@ async function run(): Promise<void> {
 // ============================================================
 // 主入口
 // ============================================================
-run().catch((error) => {
-  console.error('运行出错:', error);
-  process.exit(1);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  run().catch((error) => {
+    console.error('运行出错:', error);
+    process.exit(1);
+  });
+}
 
 // ============================================================
 // 导出（供 batch-register.ts 使用）
