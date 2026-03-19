@@ -1,7 +1,7 @@
 /**
  * core/registrar.ts
  * ================
- * Registrar 类 - 五步 HTTP 注册流程
+ * Registrar 类 - 五步 HTTP 注册流程（完全按照 Python 原版翻译）
  */
 
 import axios from 'axios';
@@ -40,228 +40,267 @@ export class Registrar {
     Object.assign(h, generateDatadogTrace());
 
     if (withSentinel) {
-      h['openai-sentinel-token'] = this.sentinelGen.generateToken();
+      const sentinel = this.sentinelGen.generate();
+      h['openai-sentinel-token'] = sentinel;
     }
 
     return h;
   }
 
   /**
-   * Step 0: 初始化 OAuth 会话
+   * Step 0: 访问主页
    */
-  async step0InitOAuth(email: string): Promise<boolean> {
-    console.log('[注册] step0InitOAuth 开始，email:', email);
-    console.log('[注册] OPENAI_AUTH_BASE:', OPENAI_AUTH_BASE);
-    console.log('[注册] OAUTH_CLIENT_ID:', OAUTH_CLIENT_ID);
-    console.log('[注册] OAUTH_REDIRECT_URI:', OAUTH_REDIRECT_URI);
-
-    // 设置 cookies
-    const cookieJar = this.session.defaults.jar as any;
-    console.log('[注册] CookieJar 存在:', !!cookieJar);
-    
-    if (cookieJar) {
-      try {
-        console.log('[注册] 尝试设置 cookie 1, 域名:', OPENAI_AUTH_BASE);
-        cookieJar.setCookieSync(`oai-did=${this.deviceId}`, OPENAI_AUTH_BASE);
-        console.log('[注册] Cookie 1 设置成功');
-        
-        console.log('[注册] 尝试设置 cookie 2, 域名: https://auth.openai.com');
-        cookieJar.setCookieSync(`oai-did=${this.deviceId}`, 'https://auth.openai.com');
-        console.log('[注册] Cookie 2 设置成功');
-      } catch (cookieError) {
-        console.error('[注册] Cookie 设置失败:', cookieError);
-        throw cookieError;
-      }
-    } else {
-      console.warn('[注册] CookieJar 不存在');
-    }
-
-    console.log('[注册] 开始生成 PKCE...');
-    const { codeVerifier, codeChallenge } = generatePKCE();
-    this.codeVerifier = codeVerifier;
-    this.state = uuidv4();
-
-    console.log('[注册] PKCE 生成成功:', { 
-      codeVerifier: codeVerifier.slice(0, 20) + '...', 
-      codeChallenge: codeChallenge.slice(0, 20) + '...' 
-    });
-
-    console.log('[注册] 开始构建 URLSearchParams...');
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: OAUTH_CLIENT_ID,
-      redirect_uri: OAUTH_REDIRECT_URI,
-      scope: 'openid profile email offline_access',
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      state: this.state,
-      screen_hint: 'signup',
-      prompt: 'login',
-    });
-    console.log('[注册] URLSearchParams 构建成功');
-
-    const url = `${OPENAI_AUTH_BASE}/oauth/authorize?${params.toString()}`;
-    console.log('[注册] OAuth URL:', url);
-    console.log('[注册] session.defaults:', JSON.stringify({
-      baseURL: this.session.defaults.baseURL,
-      timeout: this.session.defaults.timeout,
-      proxy: this.session.defaults.proxy,
-      jar: !!this.session.defaults.jar
-    }, null, 2));
-
+  async step0VisitHomepage(): Promise<boolean> {
+    console.log('[注册] step0 访问主页');
     try {
-      const response = await this.session.get(url, {
-        headers: getNavigateHeaders(),
+      const response = await this.session.get('https://chatgpt.com', {
+        headers: {
+          ...getCommonHeaders(),
+          'Upgrade-Insecure-Requests': '1',
+        },
         maxRedirects: 5,
       });
-      console.log('[注册] step0a 成功');
-      console.log('[注册] 响应状态码:', response.status);
-      console.log('[注册] 响应 headers:', JSON.stringify(response.headers, null, 2));
-      
-      // 打印所有 cookies
-      const allCookies = (this.session.defaults.jar as any)?.getCookiesSync?.(OPENAI_AUTH_BASE) || [];
-      console.log('[注册] 所有 cookies:', allCookies.map((c: any) => ({ key: c.key, value: c.value })));
+      console.log('[注册] step0 成功，状态码:', response.status);
+      return response.status < 400;
     } catch (error) {
-      console.warn('[注册] step0a 失败:', error instanceof Error ? error.message : error);
-      return false;
-    }
-
-    // 检查 login_session cookie
-    const cookies = (this.session.defaults.jar as any)?.getCookieStringSync?.(OPENAI_AUTH_BASE) || '';
-    console.log('[注册] cookies 类型:', typeof cookies);
-    console.log('[注册] cookies 值:', cookies);
-    
-    // 注意：OpenAI 可能已经不再返回 login_session cookie
-    // 先尝试继续执行，看后续步骤是否能成功
-    console.log('[注册] 跳过 login_session 检查，继续执行...');
-    // if (!cookies.includes('login_session')) {
-    //   console.warn('[注册] step0a 未获取 login_session cookie');
-    //   return false;
-    // }
-
-    // 提交邮箱
-    const h = this.headers(`${OPENAI_AUTH_BASE}/create-account`);
-    const sentinel = await buildSentinelToken(this.session, this.deviceId, 'authorize_continue');
-    if (sentinel) h['openai-sentinel-token'] = sentinel;
-
-    try {
-      const response = await this.session.post(
-        `${OPENAI_AUTH_BASE}/api/accounts/authorize/continue`,
-        {
-          username: { kind: 'email', value: email },
-          screen_hint: 'signup',
-        },
-        { headers: h }
-      );
-      return response.status === 200;
-    } catch (error) {
-      console.warn('[注册] step0b 异常:', error instanceof Error ? error.message : error);
+      console.warn('[注册] step0 失败:', error instanceof Error ? error.message : error);
       return false;
     }
   }
 
   /**
-   * Step 2: 注册用户
+   * Step 1: 获取 CSRF token
    */
-  async step2RegisterUser(email: string, password: string): Promise<boolean> {
-    const h = this.headers(`${OPENAI_AUTH_BASE}/create-account/password`, true);
-
+  async step1GetCsrf(): Promise<string | null> {
+    console.log('[注册] step1 获取 CSRF token');
     try {
+      const response = await this.session.get('https://chatgpt.com/backend-api/csrf-protection', {
+        headers: this.headers('https://chatgpt.com'),
+        maxRedirects: 5,
+      });
+      console.log('[注册] step1 成功，状态码:', response.status);
+      
+      const csrfToken = response.headers['x-csrf-token'];
+      if (!csrfToken) {
+        console.warn('[注册] 未获取到 CSRF token');
+        return null;
+      }
+      
+      console.log('[注册] CSRF token:', csrfToken);
+      return csrfToken;
+    } catch (error) {
+      console.warn('[注册] step1 失败:', error instanceof Error ? error.message : error);
+      return null;
+    }
+  }
+
+  /**
+   * Step 2: Signin 获取 authorize URL
+   */
+  async step2Signin(email: string, csrf: string): Promise<string | null> {
+    console.log('[注册] step2 Signin，email:', email);
+    try {
+      const response = await this.session.post(
+        'https://chatgpt.com/backend-api/login',
+        { email },
+        {
+          headers: {
+            ...this.headers('https://chatgpt.com', true),
+            'x-csrf-token': csrf,
+          },
+          maxRedirects: 5,
+        }
+      );
+      console.log('[注册] step2 成功，状态码:', response.status);
+
+      const data = response.data as any;
+      const authorizeUrl = data?.authorize_url || data?.url;
+      
+      if (!authorizeUrl) {
+        console.warn('[注册] 未获取到 authorize_url');
+        console.log('[注册] 响应数据:', data);
+        return null;
+      }
+
+      console.log('[注册] authorize_url:', authorizeUrl);
+      return authorizeUrl;
+    } catch (error) {
+      console.warn('[注册] step2 失败:', error instanceof Error ? error.message : error);
+      return null;
+    }
+  }
+
+  /**
+   * Step 3: Authorize（GET 授权 URL，允许重定向，返回最终 URL）
+   */
+  async step3Authorize(authorizeUrl: string): Promise<string> {
+    console.log('[注册] step3 Authorize');
+    console.log('[注册] authorize_url:', authorizeUrl);
+    
+    try {
+      const response = await this.session.get(authorizeUrl, {
+        headers: {
+          ...getCommonHeaders(),
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Referer': 'https://chatgpt.com/',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        maxRedirects: 5,
+        validateStatus: () => true,
+      });
+      
+      const finalUrl = response.request?.res?.responseUrl || authorizeUrl;
+      console.log('[注册] step3 成功，最终 URL:', finalUrl);
+      return finalUrl;
+    } catch (error) {
+      console.warn('[注册] step3 失败:', error instanceof Error ? error.message : error);
+      return authorizeUrl;
+    }
+  }
+
+  /**
+   * Step 4: 注册用户（POST /api/accounts/user/register）
+   */
+  async step4RegisterUser(email: string, password: string): Promise<boolean> {
+    console.log('[注册] step4 注册用户');
+    try {
+      const h = this.headers(`${OPENAI_AUTH_BASE}/create-account/password`);
+      const sentinel = await buildSentinelToken(this.session, this.deviceId, 'register_user');
+      if (sentinel) h['openai-sentinel-token'] = sentinel;
+
       const response = await this.session.post(
         `${OPENAI_AUTH_BASE}/api/accounts/user/register`,
         { username: email, password: password },
         { headers: h }
       );
 
-      if (response.status === 200) return true;
-      if ([301, 302].includes(response.status)) {
-        const location = response.headers['location'] || '';
-        return location.includes('email-otp') || location.includes('email-verification');
-      }
+      console.log('[注册] step4 状态码:', response.status);
+      console.log('[注册] step4 响应:', response.data);
 
-      console.warn('[注册] step2 失败:', response.status, (response.data as string)?.slice(0, 200));
-      return false;
+      return [200, 301, 302].includes(response.status);
     } catch (error) {
-      console.warn('[注册] step2 异常:', error instanceof Error ? error.message : error);
+      console.warn('[注册] step4 失败:', error instanceof Error ? error.message : error);
       return false;
     }
   }
 
   /**
-   * Step 3: 发送 OTP
+   * Step 5: 发送 OTP
    */
-  async step3SendOTP(): Promise<boolean> {
+  async step5SendOTP(): Promise<boolean> {
+    console.log('[注册] step5 发送 OTP');
     try {
-      const h = { ...getNavigateHeaders(), referer: `${OPENAI_AUTH_BASE}/create-account/password` };
-      await this.session.get(`${OPENAI_AUTH_BASE}/api/accounts/email-otp/send`, {
-        headers: h,
-        maxRedirects: 5,
-      });
-      await this.session.get(`${OPENAI_AUTH_BASE}/email-verification`, {
-        headers: h,
-        maxRedirects: 5,
-      });
-      return true;
+      const response = await this.session.get(
+        `${OPENAI_AUTH_BASE}/api/accounts/email-otp/send`,
+        {
+          headers: {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Referer': `${OPENAI_AUTH_BASE}/create-account/password`,
+            'Upgrade-Insecure-Requests': '1',
+          },
+          maxRedirects: 5,
+          validateStatus: () => true,
+        }
+      );
+
+      console.log('[注册] step5 状态码:', response.status);
+      console.log('[注册] step5 最终 URL:', response.request?.res?.responseUrl);
+
+      return response.status < 400;
     } catch (error) {
-      console.warn('[注册] step3 异常:', error instanceof Error ? error.message : error);
+      console.warn('[注册] step5 失败:', error instanceof Error ? error.message : error);
       return false;
     }
   }
 
   /**
-   * Step 4: 验证 OTP
+   * Step 6: 验证 OTP
    */
-  async step4ValidateOTP(code: string): Promise<boolean> {
-    const h = this.headers(`${OPENAI_AUTH_BASE}/email-verification`);
-
+  async step6ValidateOTP(code: string): Promise<boolean> {
+    console.log('[注册] step6 验证 OTP:', code);
     try {
+      const h = this.headers(`${OPENAI_AUTH_BASE}/email-verification`, true);
       const response = await this.session.post(
         `${OPENAI_AUTH_BASE}/api/accounts/email-otp/validate`,
-        { code: code },
+        { code },
         { headers: h }
       );
+
+      console.log('[注册] step6 状态码:', response.status);
+      console.log('[注册] step6 响应:', response.data);
+
       return response.status === 200;
     } catch (error) {
-      console.warn('[注册] step4 异常:', error instanceof Error ? error.message : error);
+      console.warn('[注册] step6 失败:', error instanceof Error ? error.message : error);
       return false;
     }
   }
 
   /**
-   * Step 5: 创建账号
+   * Step 7: 创建账号（填写姓名和生日）
    */
-  async step5CreateAccount(firstName: string, lastName: string, birthdate: string): Promise<boolean> {
-    const h = this.headers(`${OPENAI_AUTH_BASE}/about-you`);
-    const body = { name: `${firstName} ${lastName}`, birthdate: birthdate };
-
+  async step7CreateAccount(firstName: string, lastName: string, birthdate: string): Promise<boolean> {
+    console.log('[注册] step7 创建账号');
     try {
+      const h = this.headers(`${OPENAI_AUTH_BASE}/about-you`, true);
       const response = await this.session.post(
         `${OPENAI_AUTH_BASE}/api/accounts/create_account`,
-        body,
+        { name: `${firstName} ${lastName}`, birthdate: birthdate },
         { headers: h }
       );
 
-      if (response.status === 200) return true;
+      console.log('[注册] step7 状态码:', response.status);
+      console.log('[注册] step7 响应:', response.data);
 
-      if (response.status === 403 && String(response.data).toLowerCase().includes('sentinel')) {
-        h['openai-sentinel-token'] = new SentinelTokenGenerator(this.deviceId).generateToken();
-        const response2 = await this.session.post(
-          `${OPENAI_AUTH_BASE}/api/accounts/create_account`,
-          body,
-          { headers: h }
-        );
-        return [200, 301, 302].includes(response2.status);
+      const data = response.data as any;
+      const continueUrl = data?.continue_url || data?.url || data?.redirect_url;
+      
+      if (continueUrl) {
+        console.log('[注册] continue_url:', continueUrl);
       }
 
-      return [301, 302].includes(response.status);
+      return response.status === 200;
     } catch (error) {
-      console.warn('[注册] step5 异常:', error instanceof Error ? error.message : error);
+      console.warn('[注册] step7 失败:', error instanceof Error ? error.message : error);
       return false;
     }
   }
 
   /**
-   * 执行完整注册流程
+   * Step 8: Callback（访问 continue_url）
+   */
+  async step8Callback(url: string): Promise<boolean> {
+    console.log('[注册] step8 Callback');
+    console.log('[注册] callback_url:', url);
+    
+    if (!url) {
+      console.warn('[注册] 没有 callback_url，跳过');
+      return true;
+    }
+
+    try {
+      const response = await this.session.get(url, {
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        maxRedirects: 5,
+        validateStatus: () => true,
+      });
+
+      const finalUrl = response.request?.res?.responseUrl || url;
+      console.log('[注册] step8 最终 URL:', finalUrl);
+
+      // 检查是否成功（最终 URL 包含 callback 或 chatgpt.com）
+      return finalUrl.includes('callback') || finalUrl.includes('chatgpt.com');
+    } catch (error) {
+      console.warn('[注册] step8 失败:', error instanceof Error ? error.message : error);
+      return false;
+    }
+  }
+
+  /**
+   * 执行完整注册流程（完全按照 Python 原版）
    */
   async register(email: string, jwtToken: string, password: string): Promise<boolean> {
     const { generateRandomName, generateRandomBirthday } = await import('../utils/random.js');
@@ -273,45 +312,170 @@ export class Registrar {
     const { firstName, lastName } = generateRandomName();
     const birthdate = generateRandomBirthday();
 
-    console.log('[注册] step0 初始化 OAuth');
-    if (!(await this.step0InitOAuth(email))) {
+    console.log('='.repeat(60));
+    console.log('[注册] 开始完整注册流程');
+    console.log('='.repeat(60));
+
+    // Step 0: 访问主页
+    console.log('[注册] --- Step 0: 访问主页 ---');
+    if (!(await this.step0VisitHomepage())) {
       console.warn('[注册] step0 失败');
       return false;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    console.log('[注册] step2 提交注册表单');
-    if (!(await this.step2RegisterUser(email, password))) {
+    // Step 1: 获取 CSRF token
+    console.log('[注册] --- Step 1: 获取 CSRF ---');
+    const csrf = await this.step1GetCsrf();
+    if (!csrf) {
+      console.warn('[注册] step1 失败');
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // Step 2: Signin 获取 authorize URL
+    console.log('[注册] --- Step 2: Signin ---');
+    const authorizeUrl = await this.step2Signin(email, csrf);
+    if (!authorizeUrl) {
       console.warn('[注册] step2 失败');
       return false;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    console.log('[注册] step3 发送 OTP');
-    if (!(await this.step3SendOTP())) {
-      console.warn('[注册] step3 失败');
-      return false;
+    // Step 3: Authorize（关键：返回最终 URL）
+    console.log('[注册] --- Step 3: Authorize ---');
+    const finalUrl = await this.step3Authorize(authorizeUrl);
+    const finalPath = new URL(finalUrl).pathname;
+    console.log('[注册] 最终路径:', finalPath);
+    console.log('[注册] 最终 URL:', finalUrl);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // 根据最终路径决定后续流程（完全按照 Python 原版）
+    let needOTP = false;
+    let continueUrl = '';
+
+    if (finalPath.includes('/create-account/password')) {
+      console.log('[注册] 检测到全新注册流程');
+      
+      // Step 4: 注册用户
+      console.log('[注册] --- Step 4: 注册用户 ---');
+      if (!(await this.step4RegisterUser(email, password))) {
+        console.warn('[注册] step4 失败');
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Step 5: 发送 OTP
+      console.log('[注册] --- Step 5: 发送 OTP ---');
+      if (!(await this.step5SendOTP())) {
+        console.warn('[注册] step5 失败');
+        return false;
+      }
+      needOTP = true;
+
+    } else if (finalPath.includes('/email-verification') || finalPath.includes('/email-otp')) {
+      console.log('[注册] 跳到 OTP 验证阶段（authorize 已触发 OTP）');
+      // 不需要调用 step5SendOTP，因为 authorize 已经触发了 OTP 发送
+      needOTP = true;
+
+    } else if (finalPath.includes('/about-you')) {
+      console.log('[注册] 跳到填写信息阶段');
+      
+      // Step 7: 创建账号
+      console.log('[注册] --- Step 7: 创建账号 ---');
+      if (!(await this.step7CreateAccount(firstName, lastName, birthdate))) {
+        console.warn('[注册] step7 失败');
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // 获取 continue_url
+      const response = await this.session.get(
+        `${OPENAI_AUTH_BASE}/api/accounts/create_account`,
+        {
+          headers: this.headers(`${OPENAI_AUTH_BASE}/about-you`, true),
+          validateStatus: () => true,
+        }
+      );
+      const data = response.data as any;
+      continueUrl = data?.continue_url || data?.url || data?.redirect_url || '';
+
+      // Step 8: Callback
+      console.log('[注册] --- Step 8: Callback ---');
+      await this.step8Callback(continueUrl);
+      
+      console.log('[注册] 注册完成！');
+      return true;
+
+    } else if (finalPath.includes('/callback') || finalUrl.includes('chatgpt.com')) {
+      console.log('[注册] 账号已完成注册');
+      return true;
+
+    } else {
+      console.warn('[注册] 未知跳转:', finalUrl);
+      // 尝试按照全新注册流程处理
+      console.log('[注册] 尝试全新注册流程...');
+      
+      if (!(await this.step4RegisterUser(email, password))) {
+        console.warn('[注册] step4 失败');
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      if (!(await this.step5SendOTP())) {
+        console.warn('[注册] step5 失败');
+        return false;
+      }
+      needOTP = true;
     }
 
-    console.log('[注册] 等待验证码...');
-    const code = await waitForOTP(httpSession, TEMP_MAIL_WORKER_DOMAIN, jwtToken, 120);
-    if (!code) {
-      console.warn('[注册] 未收到验证码');
-      return false;
+    // 如果需要 OTP 验证
+    if (needOTP) {
+      console.log('[注册] --- 等待 OTP 验证码 ---');
+      const code = await waitForOTP(httpSession, TEMP_MAIL_WORKER_DOMAIN, jwtToken, 120);
+      if (!code) {
+        console.warn('[注册] 未收到验证码');
+        return false;
+      }
+
+      console.log('[注册] 收到验证码:', code);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Step 6: 验证 OTP
+      console.log('[注册] --- Step 6: 验证 OTP ---');
+      if (!(await this.step6ValidateOTP(code))) {
+        console.warn('[注册] step6 失败');
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Step 7: 创建账号
+      console.log('[注册] --- Step 7: 创建账号 ---');
+      if (!(await this.step7CreateAccount(firstName, lastName, birthdate))) {
+        console.warn('[注册] step7 失败');
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // 获取 continue_url
+      const response = await this.session.get(
+        `${OPENAI_AUTH_BASE}/api/accounts/create_account`,
+        {
+          headers: this.headers(`${OPENAI_AUTH_BASE}/about-you`, true),
+          validateStatus: () => true,
+        }
+      );
+      const data = response.data as any;
+      continueUrl = data?.continue_url || data?.url || data?.redirect_url || '';
+
+      // Step 8: Callback
+      console.log('[注册] --- Step 8: Callback ---');
+      await this.step8Callback(continueUrl);
     }
 
-    console.log('[注册] step4 验证 OTP:', code);
-    if (!(await this.step4ValidateOTP(code))) {
-      console.warn('[注册] step4 失败');
-      return false;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    console.log('[注册] step5 创建账号');
-    const ok = await this.step5CreateAccount(firstName, lastName, birthdate);
-    if (!ok) {
-      console.warn('[注册] step5 失败');
-    }
-    return ok;
+    console.log('='.repeat(60));
+    console.log('[注册] 注册流程完成！');
+    console.log('='.repeat(60));
+    return true;
   }
 }
