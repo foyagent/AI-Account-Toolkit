@@ -110,11 +110,17 @@ export class Registrar {
     }, null, 2));
 
     try {
-      await this.session.get(url, {
+      const response = await this.session.get(url, {
         headers: getNavigateHeaders(),
         maxRedirects: 5,
       });
       console.log('[注册] step0a 成功');
+      console.log('[注册] 响应状态码:', response.status);
+      console.log('[注册] 响应 headers:', JSON.stringify(response.headers, null, 2));
+      
+      // 打印所有 cookies
+      const allCookies = (this.session.defaults.jar as any)?.getCookiesSync?.(OPENAI_AUTH_BASE) || [];
+      console.log('[注册] 所有 cookies:', allCookies.map((c: any) => ({ key: c.key, value: c.value })));
     } catch (error) {
       console.warn('[注册] step0a 失败:', error instanceof Error ? error.message : error);
       return false;
