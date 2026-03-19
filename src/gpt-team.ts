@@ -33,20 +33,28 @@ const __dirname = dirname(__filename);
 // ============================================================
 // 配置加载
 // ============================================================
-const config = loadConfig();
-const TOTAL_ACCOUNTS = config.total_accounts;
-const TEMP_MAIL_WORKER_DOMAIN = config.temp_mail.worker_domain;
-const TEMP_MAIL_EMAIL_DOMAINS = config.temp_mail.email_domains;
-const TEMP_MAIL_ADMIN_PASSWORD = config.temp_mail.admin_password;
-const ACCOUNTS_FILE = config.output.accounts_file;
-const INVITE_TRACKER_FILE = config.output.invite_tracker_file;
-const CLI_PROXY_API_BASE = config.cli_proxy?.api_base?.rstrip('/') || '';
-const CLI_PROXY_PASSWORD = config.cli_proxy?.password || '';
-const CPA_UPLOAD_ENABLED = config.cli_proxy?.upload_enabled ?? true;
-const TEAMS: TeamConfig[] = config.teams || [];
-const PROXY = config.proxy || '';
+let _config: AppConfig | null = null;
 
-console.log(`✅ 配置已加载: 注册数量: ${TOTAL_ACCOUNTS} | 车头数量: ${TEAMS.length}`);
+function getConfig(): AppConfig {
+  if (!_config) {
+    _config = loadConfig();
+  }
+  return _config;
+}
+
+const TOTAL_ACCOUNTS = () => getConfig().total_accounts;
+const TEMP_MAIL_WORKER_DOMAIN = () => getConfig().temp_mail.worker_domain;
+const TEMP_MAIL_EMAIL_DOMAINS = () => getConfig().temp_mail.email_domains;
+const TEMP_MAIL_ADMIN_PASSWORD = () => getConfig().temp_mail.admin_password;
+const ACCOUNTS_FILE = () => getConfig().output.accounts_file;
+const INVITE_TRACKER_FILE = () => getConfig().output.invite_tracker_file;
+const CLI_PROXY_API_BASE = () => getConfig().cli_proxy?.api_base?.rstrip('/') || '';
+const CLI_PROXY_PASSWORD = () => getConfig().cli_proxy?.password || '';
+const CPA_UPLOAD_ENABLED = () => getConfig().cli_proxy?.upload_enabled ?? true;
+const TEAMS = () => (getConfig().teams || []);
+const PROXY = () => getConfig().proxy || '';
+
+console.log(`✅ 配置已加载: 注册数量: ${TOTAL_ACCOUNTS()} | 车头数量: ${TEAMS().length}`);
 
 // ============================================================
 // 常量
@@ -407,12 +415,12 @@ async function uploadToCPA(
   password: string,
   codexToken: string
 ): Promise<boolean> {
-  if (!CPA_UPLOAD_ENABLED) {
+  if (!CPA_UPLOAD_ENABLED()) {
     console.log('[CPA] 上传已禁用');
     return true;
   }
 
-  if (!CLI_PROXY_API_BASE || !CLI_PROXY_PASSWORD) {
+  if (!CLI_PROXY_API_BASE() || !CLI_PROXY_PASSWORD()) {
     console.warn('[CPA] 未配置 CPA API');
     return false;
   }
@@ -421,7 +429,7 @@ async function uploadToCPA(
 
   try {
     const response = await axios.post(
-      `${CLI_PROXY_API_BASE}/api/accounts`,
+      `${CLI_PROXY_API_BASE()}/api/accounts`,
       {
         email: email,
         password: password,
@@ -430,7 +438,7 @@ async function uploadToCPA(
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CLI_PROXY_PASSWORD}`,
+          'Authorization': `Bearer ${CLI_PROXY_PASSWORD()}`,
         },
       }
     );
@@ -454,8 +462,8 @@ async function uploadToCPA(
 function saveInviteTracker(tracker: InviteTracker): void {
   const trackers: InviteTracker[] = [];
 
-  if (existsSync(join(__dirname, '..', INVITE_TRACKER_FILE))) {
-    const content = readFileSync(join(__dirname, '..', INVITE_TRACKER_FILE), 'utf-8');
+  if (existsSync(join(__dirname, '..', INVITE_TRACKER_FILE()))) {
+    const content = readFileSync(join(__dirname, '..', INVITE_TRACKER_FILE()), 'utf-8');
     try {
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed)) {
@@ -468,7 +476,7 @@ function saveInviteTracker(tracker: InviteTracker): void {
 
   trackers.push(tracker);
   writeFileSync(
-    join(__dirname, '..', INVITE_TRACKER_FILE),
+    join(__dirname, '..', INVITE_TRACKER_FILE()),
     JSON.stringify(trackers, null, 2),
     'utf-8'
   );
@@ -479,8 +487,8 @@ function saveInviteTracker(tracker: InviteTracker): void {
 // ============================================================
 function saveAccount(account: AccountData): void {
   const line = `${account.email}|${account.password}|${account.created_at}\n`;
-  appendFileSync(join(__dirname, '..', ACCOUNTS_FILE), line, 'utf-8');
-  console.log('已保存账号:', account.email, '→', ACCOUNTS_FILE);
+  appendFileSync(join(__dirname, '..', ACCOUNTS_FILE()), line, 'utf-8');
+  console.log('已保存账号:', account.email, '→', ACCOUNTS_FILE());
 }
 
 // ============================================================
@@ -498,7 +506,7 @@ async function processAccount(team: TeamConfig): Promise<boolean> {
   }
 
   // 2. 创建临时邮箱
-  const { email, jwt } = await createTempEmail(httpSession, config.temp_mail);
+  const { email, jwt } = await createTempEmail(httpSession, getConfig().temp_mail);
   if (!email) {
     console.error('[主流程] 创建临时邮箱失败');
     return false;
@@ -569,23 +577,23 @@ async function processAccount(team: TeamConfig): Promise<boolean> {
 // ============================================================
 async function run(): Promise<void> {
   console.log('='.repeat(50));
-  console.log('开始批量处理，目标数量:', TOTAL_ACCOUNTS);
-  console.log('车头数量:', TEAMS.length);
+  console.log('开始批量处理，目标数量:', TOTAL_ACCOUNTS());
+  console.log('车头数量:', TEAMS().length);
   console.log('='.repeat(50));
 
   // 清空文件
-  writeFileSync(join(__dirname, '..', ACCOUNTS_FILE), '', 'utf-8');
-  writeFileSync(join(__dirname, '..', INVITE_TRACKER_FILE), '[]', 'utf-8');
+  writeFileSync(join(__dirname, '..', ACCOUNTS_FILE()), '', 'utf-8');
+  writeFileSync(join(__dirname, '..', INVITE_TRACKER_FILE()), '[]', 'utf-8');
 
   let success = 0;
   let fail = 0;
 
-  for (let i = 0; i < TOTAL_ACCOUNTS; i++) {
+  for (let i = 0; i < TOTAL_ACCOUNTS(); i++) {
     // 轮询选择车头
-    const teamIndex = i % TEAMS.length;
-    const team = TEAMS[teamIndex];
+    const teamIndex = i % TEAMS().length;
+    const team = TEAMS()[teamIndex];
 
-    console.log(`\n[${i + 1}/${TOTAL_ACCOUNTS}] 使用车头: ${team.name} (${team.email})`);
+    console.log(`\n[${i + 1}/${TOTAL_ACCOUNTS()}] 使用车头: ${team.name} (${team.email})`);
 
     const ok = await processAccount(team);
 
@@ -595,9 +603,9 @@ async function run(): Promise<void> {
       fail++;
     }
 
-    console.log(`进度: ${i + 1}/${TOTAL_ACCOUNTS} | 成功: ${success} | 失败: ${fail}`);
+    console.log(`进度: ${i + 1}/${TOTAL_ACCOUNTS()} | 成功: ${success} | 失败: ${fail}`);
 
-    if (i < TOTAL_ACCOUNTS - 1) {
+    if (i < TOTAL_ACCOUNTS() - 1) {
       const wait = randomInt(5, 16);
       console.log(`等待 ${wait}s...`);
       await new Promise((resolve) => setTimeout(resolve, wait * 1000));
@@ -605,7 +613,7 @@ async function run(): Promise<void> {
   }
 
   console.log('='.repeat(50));
-  console.log(`完成 | 总计: ${TOTAL_ACCOUNTS} | 成功: ${success} | 失败: ${fail}`);
+  console.log(`完成 | 总计: ${TOTAL_ACCOUNTS()} | 成功: ${success} | 失败: ${fail}`);
   console.log('='.repeat(50));
 }
 

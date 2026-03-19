@@ -27,20 +27,28 @@ const OAUTH_REDIRECT_URI = 'http://localhost:1455/auth/callback';
 // ============================================================
 // 配置加载
 // ============================================================
-const config = loadConfig();
-const TOTAL_ACCOUNTS = config.total_accounts;
-const TEMP_MAIL_WORKER_DOMAIN = config.temp_mail.worker_domain;
-const TEMP_MAIL_EMAIL_DOMAINS = config.temp_mail.email_domains;
-const TEMP_MAIL_ADMIN_PASSWORD = config.temp_mail.admin_password;
-const RESULTS_FILE = config.output.results_file;
-const PROXY = config.proxy || '';
+let _config: AppConfig | null = null;
 
-console.log(`配置已加载 | 目标数量: ${TOTAL_ACCOUNTS} | 邮箱域名: ${TEMP_MAIL_EMAIL_DOMAINS}`);
+function getConfig(): AppConfig {
+  if (!_config) {
+    _config = loadConfig();
+  }
+  return _config;
+}
+
+const TOTAL_ACCOUNTS = () => getConfig().total_accounts;
+const TEMP_MAIL_WORKER_DOMAIN = () => getConfig().temp_mail.worker_domain;
+const TEMP_MAIL_EMAIL_DOMAINS = () => getConfig().temp_mail.email_domains;
+const TEMP_MAIL_ADMIN_PASSWORD = () => getConfig().temp_mail.admin_password;
+const RESULTS_FILE = () => getConfig().output.results_file;
+const PROXY = () => getConfig().proxy || '';
+
+console.log(`配置已加载 | 目标数量: ${getConfig().total_accounts} | 邮箱域名: ${getConfig().temp_mail.email_domains}`);
 
 // ============================================================
 // HTTP 客户端
 // ============================================================
-const httpSession = createHttpClient({ proxy: PROXY });
+const httpSession = createHttpClient({ proxy: PROXY() });
 
 // ============================================================
 // 工具函数
@@ -326,7 +334,7 @@ class Registrar {
     }
 
     console.log('[注册] 等待验证码...');
-    const code = await waitForOTP(httpSession, TEMP_MAIL_WORKER_DOMAIN, jwtToken, 120);
+    const code = await waitForOTP(httpSession, TEMP_MAIL_WORKER_DOMAIN(), jwtToken, 120);
     if (!code) {
       console.warn('[注册] 未收到验证码');
       return false;
@@ -467,7 +475,7 @@ async function oauthLogin(
       let got = false;
 
       while (Date.now() - startTime < 120000) {
-        const emails = await fetchEmailsList(httpSession, TEMP_MAIL_WORKER_DOMAIN, jwtToken);
+        const emails = await fetchEmailsList(httpSession, TEMP_MAIL_WORKER_DOMAIN(), jwtToken);
 
         for (const email of emails) {
           if (tried.has(email.id)) continue;
@@ -720,8 +728,8 @@ const __dirname = dirname(__filename);
 
 function saveResult(email: string, emailJwt: string, password: string, accessToken: string): void {
   const line = `${email}|${emailJwt}|${password}|${accessToken}\n`;
-  appendFileSync(join(__dirname, '..', RESULTS_FILE), line, 'utf-8');
-  console.log('已保存:', email, '→', RESULTS_FILE);
+  appendFileSync(join(__dirname, '..', RESULTS_FILE()), line, 'utf-8');
+  console.log('已保存:', email, '→', RESULTS_FILE());
 }
 
 // ============================================================
@@ -729,7 +737,7 @@ function saveResult(email: string, emailJwt: string, password: string, accessTok
 // ============================================================
 async function processOne(proxy: string = ''): Promise<boolean> {
   // 1. 创建临时邮箱
-  const { email, jwt } = await createTempEmail(httpSession, config.temp_mail);
+  const { email, jwt } = await createTempEmail(httpSession, getConfig().temp_mail);
   if (!email) {
     console.error('创建临时邮箱失败，跳过');
     return false;
@@ -783,19 +791,19 @@ import { randomInt } from 'crypto';
 
 async function run(): Promise<void> {
   console.log('='.repeat(50));
-  console.log('开始批量处理，目标数量:', TOTAL_ACCOUNTS);
-  console.log('结果将保存到:', RESULTS_FILE);
+  console.log('开始批量处理，目标数量:', TOTAL_ACCOUNTS());
+  console.log('结果将保存到:', RESULTS_FILE());
   console.log('='.repeat(50));
 
   // 清空结果文件
-  writeFileSync(join(__dirname, '..', RESULTS_FILE), '', 'utf-8');
+  writeFileSync(join(__dirname, '..', RESULTS_FILE()), '', 'utf-8');
 
   let success = 0;
   let fail = 0;
 
-  for (let i = 0; i < TOTAL_ACCOUNTS; i++) {
-    console.log(`\n[${i + 1}/${TOTAL_ACCOUNTS}] 开始处理`);
-    const ok = await processOne(PROXY);
+  for (let i = 0; i < TOTAL_ACCOUNTS(); i++) {
+    console.log(`\n[${i + 1}/${TOTAL_ACCOUNTS()}] 开始处理`);
+    const ok = await processOne(PROXY());
 
     if (ok) {
       success++;
@@ -804,10 +812,10 @@ async function run(): Promise<void> {
     }
 
     console.log(
-      `进度: ${i + 1}/${TOTAL_ACCOUNTS} | 成功: ${success} | 失败: ${fail}`
+      `进度: ${i + 1}/${TOTAL_ACCOUNTS()} | 成功: ${success} | 失败: ${fail}`
     );
 
-    if (i < TOTAL_ACCOUNTS - 1) {
+    if (i < TOTAL_ACCOUNTS() - 1) {
       const wait = randomInt(5, 16);
       console.log(`等待 ${wait}s...`);
       await new Promise((resolve) => setTimeout(resolve, wait * 1000));
@@ -815,7 +823,7 @@ async function run(): Promise<void> {
   }
 
   console.log('='.repeat(50));
-  console.log(`完成 | 总计: ${TOTAL_ACCOUNTS} | 成功: ${success} | 失败: ${fail}`);
+  console.log(`完成 | 总计: ${TOTAL_ACCOUNTS()} | 成功: ${success} | 失败: ${fail}`);
   console.log('='.repeat(50));
 }
 
