@@ -204,13 +204,13 @@ export async function batchRegister(
   for (let i = 0; i < total; i++) {
     // 注册账号
     const account = await registerOneAccount(batchConfig, (logMsg) => {
+      // 在注册过程中只推送日志，不推送完整进度
       if (onProgress) {
         onProgress({
           current: i + 1,
           total: total,
           success: successAccounts.length,
           fail: failCount,
-          currentEmail: account?.email,
           logs: [logMsg],
         });
       }
@@ -222,7 +222,7 @@ export async function batchRegister(
       failCount++;
     }
 
-    // 更新进度
+    // 注册完成后，推送包含账号信息的进度
     if (onProgress) {
       onProgress({
         current: i + 1,
