@@ -57,10 +57,21 @@ export class Registrar {
 
     // 设置 cookies
     const cookieJar = this.session.defaults.jar as any;
+    console.log('[注册] CookieJar 存在:', !!cookieJar);
+    
     if (cookieJar) {
-      cookieJar.setCookieSync(`oai-did=${this.deviceId}`, OPENAI_AUTH_BASE);
-      cookieJar.setCookieSync(`oai-did=${this.deviceId}`, 'auth.openai.com');
-      console.log('[注册] Cookie 设置成功');
+      try {
+        console.log('[注册] 尝试设置 cookie 1, 域名:', OPENAI_AUTH_BASE);
+        cookieJar.setCookieSync(`oai-did=${this.deviceId}`, OPENAI_AUTH_BASE);
+        console.log('[注册] Cookie 1 设置成功');
+        
+        console.log('[注册] 尝试设置 cookie 2, 域名: auth.openai.com');
+        cookieJar.setCookieSync(`oai-did=${this.deviceId}`, 'auth.openai.com');
+        console.log('[注册] Cookie 2 设置成功');
+      } catch (cookieError) {
+        console.error('[注册] Cookie 设置失败:', cookieError);
+        throw cookieError;
+      }
     } else {
       console.warn('[注册] CookieJar 不存在');
     }
