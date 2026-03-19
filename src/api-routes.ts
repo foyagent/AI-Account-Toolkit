@@ -55,7 +55,6 @@ app.use(express.static(join(__dirname, '../public')));
 // ============================================================
 let runningProcess: ChildProcess | null = null;
 let batchAbortController: AbortController | null = null;
-let batchAbortController: AbortController | null = null;
 
 // ============================================================
 // API 路由
