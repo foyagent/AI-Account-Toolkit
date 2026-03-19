@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export function loadConfig(): AppConfig {
-  const configPath = join(__dirname, '../../config.yaml');
+  const configPath = join(__dirname, '../config.yaml');
 
   try {
     const fileContent = readFileSync(configPath, 'utf-8');
