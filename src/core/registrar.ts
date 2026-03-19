@@ -61,6 +61,11 @@ export class Registrar {
     this.codeVerifier = codeVerifier;
     this.state = uuidv4();
 
+    console.log('[注册] PKCE:', { 
+      codeVerifier: codeVerifier.slice(0, 20) + '...', 
+      codeChallenge: codeChallenge.slice(0, 20) + '...' 
+    });
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: OAUTH_CLIENT_ID,
@@ -74,6 +79,8 @@ export class Registrar {
     });
 
     const url = `${OPENAI_AUTH_BASE}/oauth/authorize?${params.toString()}`;
+    console.log('[注册] OAuth URL:', url);
+    console.log('[注册] OPENAI_AUTH_BASE:', OPENAI_AUTH_BASE);
 
     try {
       await this.session.get(url, {
